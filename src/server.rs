@@ -18,6 +18,7 @@ struct PunchThroughServerRes {
     pub hosts: HashMap<String, (u64, SocketAddr)>,
     pub host_client_idx: HashMap<u64, (String, SocketAddr)>,
 }
+
 pub struct PunchThroughServerPlugin;
 
 impl Plugin for PunchThroughServerPlugin {
@@ -29,7 +30,12 @@ impl Plugin for PunchThroughServerPlugin {
             host_client_idx: HashMap::new(),
         });
         app.add_system(process_server_events);
+        app.add_startup_system(server_plugin_init);
     }
+}
+
+fn server_plugin_init(){
+    info!("Initializing Server Plugin");
 }
 
 fn process_server_events(
