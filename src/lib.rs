@@ -1,7 +1,7 @@
-use std::{time::Duration, net::IpAddr};
+use std::{time::Duration, net::{IpAddr, SocketAddr}};
 
 use bevy_renet::renet::{NETCODE_KEY_BYTES, ChannelConfig, UnreliableChannelConfig, ReliableChannelConfig};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub mod server;
 pub mod client;
@@ -22,15 +22,21 @@ pub enum ServerChannel {
 
 ///Informs the server that the application at address would like to allow punch through connections
 ///Server will store this info and make it available for SwapRequests until it receives the disconnect event
-#[derive(Deserialize)]
-pub struct ClientHostCommand{
-    pub name: String,
-    pub ip: IpAddr,
-    pub port: u128
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(tag = "type")]
+pub enum ClientHostMessage{
+    HostNewLobby,
+    NewLobbyResponse {lobby_id: String},
+    RequestSwap {lobby_id: String},
+    JoinLobbyResponse {err: Option<ClientError>},
+    AttemptHandshakeCommand {socket: SocketAddr}
 }
 
-
-pub struct ClientSwapCommand{}
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ClientError{
+    LobbyNotFound {lobby: String},
+    InternalServerError,
+}
 
 impl ClientChannel {
     pub fn id(&self) -> u8 {
