@@ -23,6 +23,7 @@ pub struct PunchThroughServerPlugin;
 
 impl Plugin for PunchThroughServerPlugin {
     fn build(&self, app: &mut App) {
+        info!("Building Plugin");
         app.add_plugin(RenetServerPlugin);
         app.insert_resource(PunchThroughServerRes {
             server: get_server(),
