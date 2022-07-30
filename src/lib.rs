@@ -1,4 +1,4 @@
-use std::{time::Duration, net::{IpAddr, SocketAddr}};
+use std::{time::Duration, net::{SocketAddr}};
 
 use bevy_renet::renet::{NETCODE_KEY_BYTES, ChannelConfig, UnreliableChannelConfig, ReliableChannelConfig};
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub enum ServerChannel {
 
 ///Informs the server that the application at address would like to allow punch through connections
 ///Server will store this info and make it available for SwapRequests until it receives the disconnect event
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum ClientHostMessage{
     HostNewLobby,

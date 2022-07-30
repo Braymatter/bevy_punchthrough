@@ -5,14 +5,23 @@ use std::{
     time::SystemTime,
 };
 
-use crate::{ClientChannel, ClientHostMessage, ServerChannel, PROTOCOL_ID};
+use crate::{ClientChannel, ClientHostMessage, ServerChannel, PROTOCOL_ID, ClientError};
 pub struct PunchthroughClientPlugin {
     pub local_socket: SocketAddr,
     pub punchthrough_server: SocketAddr,
 }
 
-pub struct AttemptJoinEvent {
-    pub lobby: String,
+///
+pub enum RequestSwap {
+    JoinLobby {lobby: String},
+    HostLobby
+}
+
+/// This is the egress point of the plugin. Client apps should listen for this event
+pub enum PunchthroughEvent {
+    Success {target_sock: SocketAddr, local_sock: SocketAddr},
+    HostSuccess {lobby: String},
+    Failed {reason: String}
 }
 
 pub struct PunchthroughClientRes {
@@ -25,7 +34,8 @@ pub struct PunchthroughClientRes {
 
 impl Plugin for PunchthroughClientPlugin {
     fn build(&self, app: &mut App) {
-        app.add_event::<AttemptJoinEvent>();
+        app.add_event::<RequestSwap>();
+        app.add_event::<PunchthroughEvent>();
         app.insert_resource(PunchthroughClientRes {
             client: new_renet_client(),
             target_addr: None,
@@ -39,10 +49,10 @@ impl Plugin for PunchthroughClientPlugin {
 /// This is the main system of the punchthrough client. It will process server messages and send any responses back up to the server as required
 /// When it receives a swap comand it will insert the info into the PunchThroughClientRes.target field. It will then attempt a handshake at preset intervals
 pub fn punchthrough_system(
+    mut client_connect_request: EventReader<RequestSwap>,
+    mut punchthrough_events: EventWriter<PunchthroughEvent>,
     mut client_res: ResMut<PunchthroughClientRes>,
 ) {
-
-
     while let Some(message) = client_res
         .client
         .receive_message(ClientChannel::Command.id())
@@ -50,17 +60,17 @@ pub fn punchthrough_system(
         let server_message: ClientHostMessage = bincode::deserialize(&message).unwrap();
         match server_message {
             ClientHostMessage::JoinLobbyResponse { err } => {
-                if let Some(error) = err {
-                    match error {
-                        crate::ClientError::LobbyNotFound { lobby } => {
+                match err {
+                        Some(ClientError::LobbyNotFound { lobby }) => {
                             warn!("Lobby not found: {}", lobby)
                         }
-                        crate::ClientError::InternalServerError => {
+                        Some(ClientError::InternalServerError) => {
                             warn!("Received ISE in Join Response")
-                        }
-                    }
-                }
+                        },
+                        None => {info!("Successfully Swapped")}
+                };
             }
+            
             ClientHostMessage::AttemptHandshakeCommand { socket } => {
                 //Theoretically you should only have to send one packet to punchthrough
                 match send_pt_packet(client_res.local_socket, socket){
@@ -72,7 +82,24 @@ pub fn punchthrough_system(
                     }
                 };
             }
+            ClientHostMessage::NewLobbyResponse{lobby_id} => {
+                punchthrough_events.send(PunchthroughEvent::HostSuccess { lobby: lobby_id });
+            },
             _ => {}
+        }
+    }
+
+    //Probably should just do 1 
+    for connect_request in client_connect_request.iter() {
+        match connect_request {
+            RequestSwap::JoinLobby { lobby } => {
+                let swap_req_msg = bincode::serialize(&ClientHostMessage::RequestSwap { lobby_id: lobby.clone() }).expect("Could not serialize request to swap");
+                client_res.client.send_message(ClientChannel::Command.id(), swap_req_msg);
+            },
+            RequestSwap::HostLobby => {
+                let host_req_msg = bincode::serialize(&ClientHostMessage::HostNewLobby).expect("Could not serialize HostNewLobby Enum to bytes");
+                client_res.client.send_message(ClientChannel::Command.id(), host_req_msg);
+            }
         }
     }
 }
