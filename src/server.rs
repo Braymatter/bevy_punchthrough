@@ -19,14 +19,16 @@ struct PunchThroughServerRes {
     pub host_client_idx: HashMap<u64, (String, SocketAddr)>,
 }
 
-pub struct PunchThroughServerPlugin;
+pub struct PunchThroughServerPlugin{
+    pub port: u16
+}
 
 impl Plugin for PunchThroughServerPlugin {
     fn build(&self, app: &mut App) {
         info!("Building Plugin");
         app.add_plugin(RenetServerPlugin);
         app.insert_resource(PunchThroughServerRes {
-            server: get_server(),
+            server: get_server(self.port),
             hosts: HashMap::new(),
             host_client_idx: HashMap::new(),
         });
@@ -176,8 +178,8 @@ fn process_server_events(
     }
 }
 
-fn get_server() -> RenetServer {
-    let server_addr = "127.0.0.1:5000".parse().unwrap(); //TODO: Externalize these to CLAP Args
+fn get_server(port: u16) -> RenetServer {
+    let server_addr = format!("127.0.0.1:{port}").parse().unwrap(); //TODO: Externalize these to CLAP Args
     let socket = UdpSocket::bind(server_addr).unwrap();
     let connection_config = server_connection_config();
     let server_config =
@@ -185,7 +187,10 @@ fn get_server() -> RenetServer {
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
-    RenetServer::new(current_time, server_config, connection_config, socket).unwrap()
+    let server = RenetServer::new(current_time, server_config, connection_config, socket).unwrap();
+    info!("Started Renet server on port {port}");
+
+    server
 }
 
 pub fn server_connection_config() -> RenetConnectionConfig {

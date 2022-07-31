@@ -11,7 +11,7 @@ pub struct PunchthroughClientPlugin {
     pub punchthrough_server: SocketAddr,
 }
 
-///
+#[derive(Debug)]
 pub enum RequestSwap {
     JoinLobby {lobby: String},
     HostLobby
@@ -95,10 +95,14 @@ pub fn punchthrough_system(
             RequestSwap::JoinLobby { lobby } => {
                 let swap_req_msg = bincode::serialize(&ClientHostMessage::RequestSwap { lobby_id: lobby.clone() }).expect("Could not serialize request to swap");
                 client_res.client.send_message(ClientChannel::Command.id(), swap_req_msg);
+                info!("Sent Join Lobby Request {connect_request:#?}");
+
             },
             RequestSwap::HostLobby => {
                 let host_req_msg = bincode::serialize(&ClientHostMessage::HostNewLobby).expect("Could not serialize HostNewLobby Enum to bytes");
                 client_res.client.send_message(ClientChannel::Command.id(), host_req_msg);
+                info!("Sent Host Lobby Request");
+
             }
         }
     }
@@ -113,13 +117,17 @@ pub fn client_connection_config() -> RenetConnectionConfig {
 }
 
 fn new_renet_client() -> RenetClient {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let server_addr = "127.0.0.1:5001".parse().unwrap();
+
+    let server_socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
+
     let connection_config = client_connection_config();
+
     let current_time = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     let client_id = current_time.as_millis() as u64;
+
     let authentication = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: PROTOCOL_ID,
@@ -127,14 +135,17 @@ fn new_renet_client() -> RenetClient {
         user_data: None,
     };
 
-    RenetClient::new(
+    let client = RenetClient::new(
         current_time,
-        socket,
+        server_socket,
         client_id,
         connection_config,
         authentication,
     )
-    .unwrap()
+    .unwrap();
+
+    info!("Constructed new RenetClient with server addr {server_addr} and client addr");
+    client
 }
 
 fn send_pt_packet(local_socket: SocketAddr, target_socket: SocketAddr) -> Result<(), String> {

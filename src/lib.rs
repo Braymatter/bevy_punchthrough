@@ -74,7 +74,7 @@ impl ServerChannel {
 
     pub fn channels_config() -> Vec<ChannelConfig> {
         vec![
-            UnreliableChannelConfig {
+            ReliableChannelConfig {
                 channel_id: Self::NetworkFrame.id(),
                 ..Default::default()
             }
