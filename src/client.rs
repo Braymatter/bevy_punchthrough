@@ -118,9 +118,9 @@ pub fn client_connection_config() -> RenetConnectionConfig {
 }
 
 fn new_renet_client() -> RenetClient {
-    let server_addr = "127.0.0.1:5001".parse().unwrap();
+    let server_addr = "127.0.0.1:5000".parse().unwrap();
 
-    let server_socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
+    let socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
 
     let connection_config = client_connection_config();
 
@@ -138,14 +138,14 @@ fn new_renet_client() -> RenetClient {
 
     let client = RenetClient::new(
         current_time,
-        server_socket,
+        socket,
         client_id,
         connection_config,
         authentication,
     )
     .unwrap();
 
-    info!("Constructed new RenetClient with server addr {server_addr} and client addr");
+    println!("Constructed new RenetClient with server addr {server_addr} and client addr");
     client
 }
 
