@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub mod server;
 pub mod client;
 
+pub use bevy_renet;
 
 pub const PRIVATE_KEY: &[u8; NETCODE_KEY_BYTES] = b"an example very very secret key."; // 32-bytes
 pub const PROTOCOL_ID: u64 = 7;
