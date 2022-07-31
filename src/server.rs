@@ -14,7 +14,6 @@ use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use crate::{ClientChannel, ClientHostMessage, ServerChannel, PROTOCOL_ID};
 
 struct PunchThroughServerRes {
-    pub server: RenetServer,
     pub hosts: HashMap<String, (u64, SocketAddr)>,
     pub host_client_idx: HashMap<u64, (String, SocketAddr)>,
 }
@@ -28,10 +27,10 @@ impl Plugin for PunchThroughServerPlugin {
         info!("Building Plugin");
         app.add_plugin(RenetServerPlugin);
         app.insert_resource(PunchThroughServerRes {
-            server: get_server(self.port),
             hosts: HashMap::new(),
             host_client_idx: HashMap::new(),
         });
+        app.insert_resource(get_server(self.port));
         app.add_system(process_server_events);
         app.add_startup_system(server_plugin_init);
     }
@@ -44,13 +43,14 @@ fn server_plugin_init(){
 fn process_server_events(
     mut server_events: EventReader<ServerEvent>,
     mut server_res: ResMut<PunchThroughServerRes>,
+    mut server: ResMut<RenetServer>,
 ) {
     let pt_res = server_res.as_mut();
 
     for server_event in server_events.iter() {
         match server_event {
             ServerEvent::ClientConnected(id, _user_data) => {
-                let client_addr = pt_res.server.netcode_server.client_addr(*id).unwrap();
+                let client_addr = server.netcode_server.client_addr(*id).unwrap();
                 println!(
                     "Client connected: {} on {}:{}",
                     id,
@@ -74,9 +74,8 @@ fn process_server_events(
     //Parse messages from the clients
     let punchthrough_res = server_res.as_mut();
 
-    for client_id in punchthrough_res.server.clients_id().into_iter() {
-        while let Some(message) = punchthrough_res
-            .server
+    for client_id in server.clients_id().into_iter() {
+        while let Some(message) = server
             .receive_message(client_id, ClientChannel::Command.id())
         {
             let cmd: ClientHostMessage = match bincode::deserialize(&message) {
@@ -89,8 +88,7 @@ fn process_server_events(
 
             match cmd {
                 ClientHostMessage::HostNewLobby => {
-                    let addr = punchthrough_res
-                        .server
+                    let addr = server
                         .netcode_server
                         .client_addr(client_id)
                         .unwrap();
@@ -112,7 +110,7 @@ fn process_server_events(
                         lobby_id: id.clone(),
                     })
                     .expect("Could not encode id to bytes");
-                    punchthrough_res.server.send_message(
+                    server.send_message(
                         client_id,
                         ClientChannel::Command.id(),
                         message,
@@ -124,15 +122,14 @@ fn process_server_events(
                         let message =
                             bincode::serialize(&ClientHostMessage::JoinLobbyResponse { err: None })
                                 .expect("Could not deserialize JoinLobbyResponse to bytes.");
-                        punchthrough_res.server.send_message(
+                        server.send_message(
                             client_id,
                             ClientChannel::Command.id(),
                             message,
                         );
 
                         //Send handshake command to client
-                        if let Some(socket) = punchthrough_res
-                            .server
+                        if let Some(socket) = server
                             .netcode_server
                             .client_addr(client_id)
                         {
@@ -141,7 +138,7 @@ fn process_server_events(
                                     socket,
                                 })
                                 .expect("Error serializing Client_Swap_Message to bytes");
-                            punchthrough_res.server.send_message(
+                            server.send_message(
                                 client_id,
                                 ClientChannel::Command.id(),
                                 client_swap_message,
@@ -154,7 +151,7 @@ fn process_server_events(
                                     socket: host_client.1,
                                 })
                                 .expect("Could not serialize swap message to bytes");
-                            punchthrough_res.server.send_message(
+                            server.send_message(
                                 host_client.0,
                                 ClientChannel::Command.id(),
                                 server_swap_message,
@@ -168,7 +165,7 @@ fn process_server_events(
                                 })
                                 .expect("Could not serialize client error to bytes");
 
-                            punchthrough_res.server.send_message(client_id, ClientChannel::Command.id(), join_response);
+                            server.send_message(client_id, ClientChannel::Command.id(), join_response);
                         }
                     }
                 }
