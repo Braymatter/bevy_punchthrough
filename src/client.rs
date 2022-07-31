@@ -18,6 +18,7 @@ pub enum RequestSwap {
 }
 
 /// This is the egress point of the plugin. Client apps should listen for this event
+#[derive(Debug)]
 pub enum PunchthroughEvent {
     Success {target_sock: SocketAddr, local_sock: SocketAddr},
     HostSuccess {lobby: String},
@@ -58,6 +59,7 @@ pub fn punchthrough_system(
         .receive_message(ClientChannel::Command.id())
     {
         let server_message: ClientHostMessage = bincode::deserialize(&message).unwrap();
+        info!("Client received message from server: {server_message:#?}");
         match server_message {
             ClientHostMessage::JoinLobbyResponse { err } => {
                 match err {
