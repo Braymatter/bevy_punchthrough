@@ -7,13 +7,12 @@ use std::{
 use bevy::prelude::*;
 use bevy_renet::{
     renet::{RenetConnectionConfig, RenetServer, ServerAuthentication, ServerConfig, ServerEvent},
-    RenetServerPlugin,
 };
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
-use crate::{ClientChannel, ClientHostMessage, ServerChannel, PROTOCOL_ID};
+use crate::{ClientChannel, ClientHostMessage, ServerChannel, PROTOCOL_ID, renet_plugin::PTRenetServerPlugin};
 
-struct PunchThroughServerRes {
+pub struct PunchThroughServerRes {
     pub hosts: HashMap<String, (u64, SocketAddr)>,
     pub host_client_idx: HashMap<u64, (String, SocketAddr)>,
 }
@@ -25,7 +24,7 @@ pub struct PunchThroughServerPlugin{
 impl Plugin for PunchThroughServerPlugin {
     fn build(&self, app: &mut App) {
         info!("Building Plugin");
-        app.add_plugin(RenetServerPlugin);
+        app.add_plugin(PTRenetServerPlugin);
         app.insert_resource(PunchThroughServerRes {
             hosts: HashMap::new(),
             host_client_idx: HashMap::new(),
@@ -98,7 +97,7 @@ fn process_server_events(
 
                     //TODO: Put code in to ensure this is unique
                     let id = match String::from_utf8(random_str) {
-                        Ok(id) => id,
+                        Ok(id) => id.to_ascii_uppercase(),
                         Err(e) => {
                             println!("Error generating id: {e:#?}");
                             continue;
@@ -118,7 +117,7 @@ fn process_server_events(
                 }
 
                 ClientHostMessage::RequestSwap { lobby_id } => {
-                    if punchthrough_res.hosts.contains_key(&lobby_id) {
+                    if punchthrough_res.hosts.contains_key(&lobby_id.to_ascii_uppercase()) {
                         let message =
                             bincode::serialize(&ClientHostMessage::JoinLobbyResponse { err: None })
                                 .expect("Could not deserialize JoinLobbyResponse to bytes.");
@@ -145,7 +144,7 @@ fn process_server_events(
                             );
 
                             //Send handshake command to client client
-                            let host_client = punchthrough_res.hosts.get(&lobby_id).unwrap();
+                            let host_client = punchthrough_res.hosts.get(&lobby_id.to_uppercase()).unwrap();
                             let server_swap_message =
                                 bincode::serialize(&ClientHostMessage::AttemptHandshakeCommand {
                                     socket: host_client.1,
@@ -160,7 +159,7 @@ fn process_server_events(
                             let join_response =
                                 bincode::serialize(&ClientHostMessage::JoinLobbyResponse {
                                     err: Some(crate::ClientError::LobbyNotFound {
-                                        lobby: lobby_id,
+                                        lobby: lobby_id.to_uppercase(),
                                     }),
                                 })
                                 .expect("Could not serialize client error to bytes");

@@ -27,6 +27,7 @@ pub enum PunchthroughEvent {
 
 pub struct PunchthroughClientRes {
     /// Contains a tuple of the address received from the server swap response, the number of times its been tried, and the last time it was tried
+    pub client: RenetClient,
     pub target_addr: Option<(SocketAddr, u16)>,
     pub local_socket: SocketAddr,
     pub punchthrough_server: SocketAddr,
@@ -36,8 +37,8 @@ impl Plugin for PunchthroughClientPlugin {
     fn build(&self, app: &mut App) {
         app.add_event::<RequestSwap>();
         app.add_event::<PunchthroughEvent>();
-        app.insert_resource(new_renet_client());
         app.insert_resource(PunchthroughClientRes {
+            client: new_renet_client(),
             target_addr: None,
             local_socket: self.local_socket,
             punchthrough_server: self.punchthrough_server,
@@ -51,10 +52,9 @@ impl Plugin for PunchthroughClientPlugin {
 pub fn punchthrough_system(
     mut client_connect_request: EventReader<RequestSwap>,
     mut punchthrough_events: EventWriter<PunchthroughEvent>,
-    mut client: ResMut<RenetClient>,
     mut client_res: ResMut<PunchthroughClientRes>,
 ) {
-    while let Some(message) = client
+    while let Some(message) = client_res.client
         .receive_message(ClientChannel::Command.id())
     {
         let server_message: ClientHostMessage = bincode::deserialize(&message).unwrap();
@@ -95,13 +95,13 @@ pub fn punchthrough_system(
         match connect_request {
             RequestSwap::JoinLobby { lobby } => {
                 let swap_req_msg = bincode::serialize(&ClientHostMessage::RequestSwap { lobby_id: lobby.clone() }).expect("Could not serialize request to swap");
-                client.send_message(ClientChannel::Command.id(), swap_req_msg);
+                client_res.client.send_message(ClientChannel::Command.id(), swap_req_msg);
                 info!("Sent Join Lobby Request {connect_request:#?}");
 
             },
             RequestSwap::HostLobby => {
                 let host_req_msg = bincode::serialize(&ClientHostMessage::HostNewLobby).expect("Could not serialize HostNewLobby Enum to bytes");
-                client.send_message(ClientChannel::Command.id(), host_req_msg);
+                client_res.client.send_message(ClientChannel::Command.id(), host_req_msg);
                 info!("Sent Host Lobby Request");
 
             }
@@ -120,7 +120,7 @@ pub fn client_connection_config() -> RenetConnectionConfig {
 fn new_renet_client() -> RenetClient {
     let server_addr = "127.0.0.1:5000".parse().unwrap();
 
-    let socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
+    let local_socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
 
     let connection_config = client_connection_config();
 
@@ -138,7 +138,7 @@ fn new_renet_client() -> RenetClient {
 
     let client = RenetClient::new(
         current_time,
-        socket,
+        local_socket,
         client_id,
         connection_config,
         authentication,
