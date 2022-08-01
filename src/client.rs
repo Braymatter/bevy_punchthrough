@@ -38,7 +38,7 @@ impl Plugin for PunchthroughClientPlugin {
         app.add_event::<RequestSwap>();
         app.add_event::<PunchthroughEvent>();
         app.insert_resource(PunchthroughClientRes {
-            client: new_renet_client(),
+            client: new_renet_client(self),
             target_addr: None,
             local_socket: self.local_socket,
             punchthrough_server: self.punchthrough_server,
@@ -117,10 +117,9 @@ pub fn client_connection_config() -> RenetConnectionConfig {
     }
 }
 
-fn new_renet_client() -> RenetClient {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
-
-    let local_socket = UdpSocket::bind("127.0.0.1:5001").unwrap();
+fn new_renet_client(ptc_plugin: &PunchthroughClientPlugin) -> RenetClient {
+    info!("Binding Local Socket to {}", ptc_plugin.local_socket.to_string());
+    let local_socket = UdpSocket::bind(ptc_plugin.local_socket).unwrap();
 
     let connection_config = client_connection_config();
 
@@ -132,7 +131,7 @@ fn new_renet_client() -> RenetClient {
     let authentication = ClientAuthentication::Unsecure {
         client_id,
         protocol_id: PROTOCOL_ID,
-        server_addr,
+        server_addr: ptc_plugin.punchthrough_server,
         user_data: None,
     };
 
@@ -145,7 +144,7 @@ fn new_renet_client() -> RenetClient {
     )
     .unwrap();
 
-    println!("Constructed new RenetClient with server addr {server_addr} and client addr");
+    println!("Constructed new RenetClient with server addr {} and client addr", ptc_plugin.punchthrough_server);
     client
 }
 
